@@ -32,13 +32,14 @@ Organize code into modules with one responsibility each. That way a task can go 
 | Layer | Responsibility | May import |
 |-------|----------------|------------|
 | `server` | MCP server setup, registers tools | `tools` |
-| `tools/` | One file per domain (courses, assignments, grades, …); thin MCP tool functions that validate input and shape output | `client`, `models` |
+| `tools/` | One file per domain (courses, deadlines, materials, assignments, grades, messages); `async def f(m: MoodleClient, ...)` returning models, no MCP dependency | `client`, `parsers`, `models`, `config`, sibling tools |
+| `parsers` | Pure HTML → data for page-only routes (selectolax); no I/O | `models` |
 | `client` | All HTTP/Playwright interaction with Moodle (page fetches, AJAX `service.php` calls, `sesskey` handling) | `auth`, `models` |
 | `auth` | Obtain, persist, validate, and refresh the browser session | `config` |
 | `models` | Typed data structures (dataclasses / TypedDicts) shared across layers | — |
-| `config` | Constants: `BASE_URL`, session state path | — |
+| `config` | Constants: `BASE_URL`, session state path, `DOWNLOAD_DIR` | — |
 
-All modules live in the `moodle_mcp/` package; `main.py` is a thin runnable entry point. Implemented so far: `config`, `auth`.
+All modules live in the `moodle_mcp/` package. `main.py` is a dev CLI that runs any tool live (`uv run python main.py contents <course_id>`); the MCP `server` will replace it. Implemented so far: everything except `server`.
 
 Rules:
 - Only `client` talks to Moodle; only `auth` knows how sessions are stored. Tools never touch Playwright or raw HTTP directly.
