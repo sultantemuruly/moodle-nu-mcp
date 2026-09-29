@@ -34,8 +34,11 @@ Organize code into modules with one responsibility each. That way a task can go 
 | `server` | MCP server setup, registers tools | `tools` |
 | `tools/` | One file per domain (courses, assignments, grades, …); thin MCP tool functions that validate input and shape output | `client`, `models` |
 | `client` | All HTTP/Playwright interaction with Moodle (page fetches, AJAX `service.php` calls, `sesskey` handling) | `auth`, `models` |
-| `auth` | Obtain, persist, validate, and refresh the browser session | — |
+| `auth` | Obtain, persist, validate, and refresh the browser session | `config` |
 | `models` | Typed data structures (dataclasses / TypedDicts) shared across layers | — |
+| `config` | Constants: `BASE_URL`, session state path | — |
+
+All modules live in the `moodle_mcp/` package; `main.py` is a thin runnable entry point. Implemented so far: `config`, `auth`.
 
 Rules:
 - Only `client` talks to Moodle; only `auth` knows how sessions are stored. Tools never touch Playwright or raw HTTP directly.
@@ -55,6 +58,10 @@ Aim for clear, elegant code, and the fewest lines that still work correctly and 
 - Fail loudly with specific exceptions. Catch only where you can recover or add context. No bare `except`.
 - Async by default for I/O (Playwright async API, async MCP handlers). Don't mix sync and async Playwright.
 - Constants such as the base URL live in one place and are never duplicated.
+
+## CHANGELOG.md — keep in sync
+
+Every user-visible or architectural change adds a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md), in the same change as the code. Use the sections Added / Changed / Fixed / Removed. Write one line per change that says what changed, not how. Skip pure refactors and formatting.
 
 ## Secrets — check before every commit
 

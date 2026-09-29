@@ -9,7 +9,7 @@ NU Moodle does **not** use local username/password auth. It delegates login to
 (`auth_oauth2`). The password never reaches Moodle, so the usual
 `POST /login/token.php` (username + password → `wstoken`) flow **cannot work**.
 Authenticated access must reuse a **real logged-in browser session**, which is
-exactly what `auth.py` does (Playwright → manual Microsoft login → saved
+exactly what `moodle_mcp/auth.py` does (Playwright → manual Microsoft login → saved
 `storage_state`).
 
 ## Evidence (inspected live on the login page)
@@ -34,6 +34,13 @@ Login-page links point to Microsoft, confirming the IdP:
 A username/password form is still rendered at `/login/index.php`, but it is not
 the real authentication path — the identity check happens at Microsoft.
 
+**Open question (observed 2026-09-29):** the unauthenticated login page contains
+no OAuth2/Microsoft button — its only form posts back to `/login/index.php`. So
+the Microsoft check may happen server-side behind that form rather than via a
+browser redirect. The manual-browser approach works either way; confirm the real
+path (watch the redirects during a login) before relying on step 2 below.
+The page also reports Moodle `version=2025100604` (Moodle 5.1).
+
 ## The actual login flow
 
 1. User opens `/login/index.php` and starts login.
@@ -57,7 +64,7 @@ password in Moodle to validate, so that request cannot return a token.
 
 ### Approaches that work
 
-**A. Session-cookie reuse (current approach in `auth.py`) — recommended**
+**A. Session-cookie reuse (implemented in `moodle_mcp/auth.py`) — recommended**
 - Drive a real browser (Playwright), let the user complete the Microsoft login
   once, then persist `storage_state` (the `MoodleSession` cookie + related state).
 - Reuse that saved state for later runs until the session expires; then
@@ -83,6 +90,27 @@ password in Moodle to validate, so that request cannot return a token.
   as `wstoken`.
 
 Approach A is the least fragile here and is already what the project implements.
+
+## Implementation (`moodle_mcp/auth.py`)
+
+- `login()` opens a visible Chromium on `/login/index.php`; the user logs in by
+  hand. Login counts as done once the page lands on a Moodle URL outside
+  `/login/` and `/auth/`. Then `storage_state` is saved to
+  `~/.config/moodle-mcp/storage_state.json` (mode `600`, outside the repo).
+- `is_valid()` checks the session with `GET /my/` without following redirects:
+  `200` = logged in; without a session Moodle answers `303 → /login/index.php`
+  (verified live).
+- `session()` yields a headless context loaded with the saved state and raises
+  `SessionExpiredError` if the file is missing or the session is dead.
+- `uv run python main.py` reuses a valid session, or opens the browser to log in.
+
+**First real login (2026-09-30):** the saved state contained cookies only for
+`moodle.nu.edu.kz` — `MoodleSession` and `MOODLENODE` (browser-session cookies,
+no client-side expiry) and `MOODLEID1_` (~2 months). No `login.microsoftonline.com`
+cookies were saved, which supports the open question above: the login likely went
+through Moodle's own form, with any Microsoft check done server-side. How long
+the session lasts is decided by Moodle's server-side session timeout, which we
+haven't measured yet.
 
 ## Key facts to remember
 
